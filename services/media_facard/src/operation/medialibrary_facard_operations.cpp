@@ -120,7 +120,7 @@ void CardAssetUriObserver::PostAssetChangeTask()
                 MEDIA_DEBUG_LOG("change.assetChangeType = %{public}d", change.assetChangeType);
             }
             AAFwk::Want want;
-            want.SetElementName("com.huawei.hmos.photos", "FACardServiceAbility");
+            want.SetElementName("com.ohos.photos", "FACardServiceAbility");
             want.SetParam("assetChangeUris", assetChangeUris);
             want.SetParam("assetChangeTypes", assetChangeTypes);
             int32_t userId = -1;
@@ -151,7 +151,7 @@ void FaCloudSyncSwitchObserver::PostAssetChangeTask()
                     change.cloudSyncChangeUri.c_str(), change.cloudSyncChangeType);
             }
             AAFwk::Want want;
-            want.SetElementName("com.huawei.hmos.photos", "FACardServiceAbility");
+            want.SetElementName("com.ohos.photos", "FACardServiceAbility");
             want.SetParam("assetChangeUris", assetChangeUris);
             want.SetParam("assetChangeTypes", assetChangeTypes);
             int32_t userId = -1;

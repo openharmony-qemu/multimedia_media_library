@@ -25,6 +25,7 @@
 #include "medialibrary_napi_utils_ext.h"
 #include "medialibrary_tracer.h"
 #include "photo_map_column.h"
+#include "userfile_manager_types.h"
 #include "result_set_utils.h"
 #include "userfile_client.h"
 #include "album_operation_uri.h"
@@ -635,6 +636,20 @@ napi_value PhotoAlbumNapi::JSGetDateAdded(napi_env env, napi_callback_info info)
     return jsResult;
 }
 
+static int32_t PublicCoverUriSource(int32_t source)
+{
+    // Native storage distinguishes local, cloud and pending manual covers.
+    // API 26 exposes a single MANUAL_COVER value; do not rewrite native storage.
+    switch (source) {
+        case CoverUriSource::MANUAL_CLOUD_COVER:
+        case CoverUriSource::MANUAL_LOCAL_COVER:
+        case CoverUriSource::MANUAL_WAIT_PULL_COVER:
+            return CoverUriSource::MANUAL_CLOUD_COVER;
+        default:
+            return source;
+    }
+}
+
 napi_value PhotoAlbumNapi::JSGetCoverUriSource(napi_env env, napi_callback_info info)
 {
     CHECK_COND_LOG_THROW_RETURN_RET(env, MediaLibraryNapiUtils::IsSystemApp(), JS_ERR_PERMISSION_DENIED,
@@ -643,7 +658,7 @@ napi_value PhotoAlbumNapi::JSGetCoverUriSource(napi_env env, napi_callback_info 
     CHECK_NULLPTR_RET(UnwrapPhotoAlbumObject(env, info, &obj));
 
     napi_value jsResult = nullptr;
-    CHECK_ARGS(env, napi_create_int32(env, obj->GetCoverUriSource(), &jsResult),
+    CHECK_ARGS(env, napi_create_int32(env, PublicCoverUriSource(obj->GetCoverUriSource()), &jsResult),
         JS_INNER_FAIL);
     return jsResult;
 }

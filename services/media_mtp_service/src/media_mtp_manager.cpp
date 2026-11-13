@@ -17,6 +17,9 @@
 #include <thread>
 
 #include "media_mtp_manager.h"
+#ifdef MEDIA_QEMU_STANDARD_FUNCTIONFS
+#include "qemu_mtp_mount_watcher.h"
+#endif
 #include "media_log.h"
 #include "media_mtp_service_manager.h"
 #include "media_mtp_subscriber.h"
@@ -61,6 +64,12 @@ void MediaMtpManager::Init()
         MEDIA_INFO_LOG("MediaMtpManager Subscribe result = %{public}d", result);
         // param 监听注册
         MediaMtpManager::GetInstance().RegisterMtpParamListener();
+#ifdef MEDIA_QEMU_STANDARD_FUNCTIONFS
+        // This product has an independent standard FunctionFS device. Do not
+        // switch the unrelated physical/HDC gadget's current functions.
+        QemuMtpMountWatcher::Instance().Start();
+        return;
+#endif
 
         int32_t funcs = 0;
         int ret = OHOS::USB::UsbSrvClient::GetInstance().GetCurrentFunctions(funcs);
@@ -91,6 +100,9 @@ void MediaMtpManager::Init()
 
 void MediaMtpManager::Stop()
 {
+#ifdef MEDIA_QEMU_STANDARD_FUNCTIONFS
+    QemuMtpMountWatcher::Instance().Stop();
+#endif
     MediaMtpManager::GetInstance().RemoveMtpParamListener();
 }
 
@@ -115,6 +127,11 @@ void MediaMtpManager::OnMtpParamDisableChanged(const char *key, const char *valu
     CHECK_AND_RETURN_INFO_LOG(strcmp(key, MTP_SERVER_DISABLE) == 0, "event key mismatch");
     std::string param(MTP_SERVER_DISABLE);
     bool mtpDisable = system::GetBoolParameter(param, false);
+#ifdef MEDIA_QEMU_STANDARD_FUNCTIONFS
+    // The joined worker observes the same genuine EDM policy and stops/restarts
+    // the existing service. No change to g1/HDC is needed for this other UDC.
+    return;
+#endif
     if (!mtpDisable) {
         int32_t funcs = 0;
         int ret = OHOS::USB::UsbSrvClient::GetInstance().GetCurrentFunctions(funcs);

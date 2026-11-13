@@ -19,6 +19,8 @@
 #include "medialibrary_napi_log.h"
 #include "big_integer.h"
 #include "asset_value.h"
+#include <cmath>
+#include <limits>
 
 using OHOS::HiviewDFX::HiLog;
 using OHOS::HiviewDFX::HiLogLabel;
@@ -32,6 +34,16 @@ using BigInt = BigInteger;
 using Assets = std::vector<Asset>;
 using FloatVector = std::vector<float>;
 thread_local napi_ref ResultSetNapi::sResultSetConstructor_ = nullptr;
+
+template <>
+napi_value Convert2JSValue(napi_env env, const std::monostate &)
+{
+    napi_value jsValue = nullptr;
+    if (napi_get_null(env, &jsValue) != napi_ok) {
+        NAPI_ERR_LOG("Napi_get_null failed");
+    }
+    return jsValue;
+}
 
 template <>
 napi_value Convert2JSValue(napi_env env, const int32_t &value)
@@ -216,12 +228,17 @@ static std::shared_ptr<ResultSet> GetInt32AndResultSet(napi_env env, napi_callba
 {
     napi_status status;
     napi_value thisVar = nullptr;
-    size_t argc = 1;
-    napi_value args[1];
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
     CHECK_COND_WITH_ERR_MESSAGE(env, napi_get_cb_info(env, info, &argc, args, &thisVar, nullptr) == napi_ok,
                                 JS_E_INNER_FAIL, "NAPI napi_get_cb_info failed");
-    CHECK_COND_WITH_ERR_MESSAGE(env, napi_get_value_int32(env, args[0], &ret) == napi_ok, JS_E_PARAM_INVALID,
-                                "NAPI napi_get_value_int32 failed");
+    CHECK_COND_WITH_ERR_MESSAGE(env, argc == 1, JS_E_PARAM_INVALID, "One index parameter required");
+    double number = 0;
+    CHECK_COND_WITH_ERR_MESSAGE(env, napi_get_value_double(env, args[0], &number) == napi_ok &&
+        std::isfinite(number) && std::trunc(number) == number &&
+        number >= std::numeric_limits<int32_t>::min() && number <= std::numeric_limits<int32_t>::max(),
+        JS_E_PARAM_INVALID, "Index must be a finite signed 32-bit integer");
+    ret = static_cast<int32_t>(number);
     ResultSetNapi *obj = nullptr;
     status = napi_unwrap(env, thisVar, reinterpret_cast<void **>(&obj));
     CHECK_COND_WITH_ERR_MESSAGE(env, status == napi_ok && obj != nullptr, JS_E_INNER_FAIL, "NAPI env error");
@@ -392,7 +409,11 @@ napi_value ResultSetNapi::JSGoToFirstRow(napi_env env, napi_callback_info info)
 {
     std::shared_ptr<ResultSet> resultset = GetResultSet(env, info);
     CHECK_COND_WITH_ERR_MESSAGE(env, resultset != nullptr, JS_E_INNER_FAIL, "Resultset is nullptr");
-    CHECK_COND_WITH_ERR_MESSAGE(env, resultset->GoToFirstRow() == E_OK, JS_E_INNER_FAIL, "Database error");
+    int err = resultset->GoToFirstRow();
+    if (err == E_ROW_OUT_RANGE) {
+        return Convert2JSValue(env, false);
+    }
+    CHECK_COND_WITH_ERR_MESSAGE(env, err == E_OK, JS_E_INNER_FAIL, "Database error");
     return Convert2JSValue(env, true);
 }
 
@@ -494,6 +515,11 @@ napi_value ResultSetNapi::JSGetRow(napi_env env, napi_callback_info info)
 napi_value ResultSetNapi::JSClose(napi_env env, napi_callback_info info)
 {
     ResultSetNapi *obj = GetResultSetNapi(env, info);
+    if (obj == nullptr) {
+        // Keep the existing helper exception; never dereference a bare or
+        // invalid native wrapper while an exception is already pending.
+        return nullptr;
+    }
     if (obj->resultSetPtr != nullptr) {
         obj->resultSetPtr = nullptr;
     } else {

@@ -30,6 +30,7 @@
 #include "photo_asset_custom_record_manager_napi.h"
 #include "cloud_media_download_resources_status_napi.h"
 #include "result_set_napi.h"
+#include "knowledge_content_napi.h"
 #include "task_signal_napi.h"
 
 namespace OHOS {
@@ -48,6 +49,9 @@ static napi_value PhotoAccessHelperExport(napi_env env, napi_value exports)
     HighlightAlbumNapi::AnalysisAlbumInit(env, exports);
     HighlightAlbumNapi::Init(env, exports);
     ResultSetNapi::Init(env, exports);
+    if (KnowledgeContentNapi::Init(env, exports) == nullptr) {
+        return nullptr;
+    }
     MediaAssetEditDataNapi::Init(env, exports);
     MediaAssetChangeRequestNapi::Init(env, exports);
     MediaAssetsChangeRequestNapi::Init(env, exports);

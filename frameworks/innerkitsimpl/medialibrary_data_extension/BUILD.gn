@@ -252,6 +252,7 @@ config("media_data_extension_public_config") {
     "${MEDIALIB_THUMBNAIL_PATH}/include",
     "${MEDIALIB_FACARD_PATH}/include",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/include/rdbstore",
+    "${MEDIALIB_INTERFACES_PATH}/kits/js/include",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_kv_db/include",
     "${MEDIALIB_BUSINESS_PATH}/media_analysis_data_manager/include/dao/table",
   ]
@@ -930,6 +931,8 @@ ohos_shared_library("medialibrary_data_extension") {
     "${MEDIALIB_FACARD_PATH}/src/tab_facard_photos_table_event_handler.cpp",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/src/rdbstore/media_upgrade.cpp",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/src/rdbstore/medialibrary_rdbstore.cpp",
+    "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/src/rdbstore/knowledge_holiday_index.cpp",
+    "${MEDIALIB_JS_PATH}/src/knowledge_content_query.cpp",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/src/rdbstore/medialibrary_restore.cpp",
     "${MEDIALIB_NEW_SERVICES_PATH}/media_rdbstore/src/rdbstore/medialibrary_upgrade_utils.cpp",
     "${MEDIALIB_SERVICES_PATH}/media_dfx/src/dfx_anco_manager.cpp",
@@ -1419,6 +1422,7 @@ ohos_shared_library("medialibrary_data_extension") {
     "preferences:native_preferences",
     "qos_manager:concurrent_task_client",
     "qos_manager:qos",
+    "openssl:libcrypto_shared",
     "relational_store:native_dataability",
     "relational_store:native_rdb",
     "relational_store:rdb_data_share_adapter",
@@ -1455,6 +1459,10 @@ ohos_shared_library("medialibrary_data_extension") {
     external_deps += [ "dfs_service:cloudsync_kit_inner" ]
   }
   defines += [ "MEDIALIBRARY_COMPATIBILITY=1" ]
+  if (media_library_feature_qemu_standard_functionfs) {
+    assert(media_library_feature_mtp)
+    defines += [ "MEDIA_QEMU_STANDARD_FUNCTIONFS" ]
+  }
   if (media_library_feature_mtp) {
     defines += [ "MEDIALIBRARY_MTP_ENABLE=1" ]
   }

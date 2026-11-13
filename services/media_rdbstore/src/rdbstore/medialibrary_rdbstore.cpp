@@ -15,6 +15,7 @@
 #define MLOG_TAG "RdbStore"
 
 #include "medialibrary_rdbstore.h"
+#include "knowledge_holiday_index.h"
 
 #include <regex>
 #include <thread>
@@ -1122,6 +1123,7 @@ int32_t MediaLibraryRdbStore::Init()
     MEDIA_INFO_LOG("Init rdb store: [version: %{public}d]", MEDIA_RDB_VERSION);
     CHECK_AND_RETURN_RET(rdbStore_ == nullptr, E_OK);
 
+    KnowledgeHolidayIndex::StopObserver();
     int32_t errCode = 0;
     MediaLibraryDataCallBack rdbDataCallBack;
     MediaLibraryTracer tracer;
@@ -1138,6 +1140,15 @@ int32_t MediaLibraryRdbStore::Init()
             static_cast<uint32_t>(isRebuilt), static_cast<uint32_t>(isInitVersion));
         rdbDataCallBack.OnCreate(*rdbStore_);
     }
+    // New/legacy database imports the fixed trusted resource before queries.
+    // Failure preserves the last complete index and is logged without disabling
+    // unrelated media storage. Polling observes later configuration versions.
+    const int calendarResult = KnowledgeHolidayIndex::Refresh(*rdbStore_);
+    CHECK_AND_PRINT_LOG(calendarResult == NativeRdb::E_OK,
+        "Knowledge holiday initialization failed: %{public}d", calendarResult);
+    const int calendarObserver = KnowledgeHolidayIndex::Observe(rdbStore_);
+    CHECK_AND_PRINT_LOG(calendarObserver == NativeRdb::E_OK,
+        "Knowledge holiday configuration observer failed: %{public}d", calendarObserver);
     MEDIA_INFO_LOG("MediaLibraryRdbStore::Init(), SUCCESS");
     return E_OK;
 }
@@ -1173,6 +1184,7 @@ int32_t MediaLibraryRdbStore::Init(const RdbStoreConfig &config, int version, Rd
     if (rdbStore_ != nullptr) {
         return E_OK;
     }
+    KnowledgeHolidayIndex::StopObserver();
     int32_t errCode = 0;
     MediaLibraryTracer tracer;
     tracer.Start("MediaLibraryRdbStore::Init GetRdbStore with config");
@@ -1182,6 +1194,15 @@ int32_t MediaLibraryRdbStore::Init(const RdbStoreConfig &config, int version, Rd
         MEDIA_ERR_LOG("GetRdbStore with config is failed");
         return errCode;
     }
+    // New/legacy database imports the fixed trusted resource before queries.
+    // Failure preserves the last complete index and is logged without disabling
+    // unrelated media storage. Polling observes later configuration versions.
+    const int calendarResult = KnowledgeHolidayIndex::Refresh(*rdbStore_);
+    CHECK_AND_PRINT_LOG(calendarResult == NativeRdb::E_OK,
+        "Knowledge holiday initialization failed: %{public}d", calendarResult);
+    const int calendarObserver = KnowledgeHolidayIndex::Observe(rdbStore_);
+    CHECK_AND_PRINT_LOG(calendarObserver == NativeRdb::E_OK,
+        "Knowledge holiday configuration observer failed: %{public}d", calendarObserver);
     MEDIA_INFO_LOG("MediaLibraryRdbStore::Init with config, SUCCESS");
     return E_OK;
 }
@@ -1190,6 +1211,11 @@ MediaLibraryRdbStore::~MediaLibraryRdbStore() = default;
 
 void MediaLibraryRdbStore::Stop()
 {
+    // Wait outside observer locks for any in-flight import before releasing DB.
+    // Reentrant worker Stop cancels; its local shared RDB keeps that call alive.
+    const int calendarStop = KnowledgeHolidayIndex::StopObserver();
+    CHECK_AND_PRINT_LOG(calendarStop == NativeRdb::E_OK,
+        "Knowledge holiday observer join deferred: %{public}d", calendarStop);
     rdbStore_ = nullptr;
 }
 

@@ -1051,19 +1051,18 @@ void MediaLibraryNapiUtils::HandleError(
 void MediaLibraryNapiUtils::CreateNapiErrorObject(napi_env env, napi_value &errorObj, const int32_t errCode,
     const string errMsg)
 {
-    napi_status statusError;
-    napi_value napiErrorCode = nullptr;
-    napi_value napiErrorMsg = nullptr;
-    statusError = napi_create_string_utf8(env, to_string(errCode).c_str(), NAPI_AUTO_LENGTH, &napiErrorCode);
-    if (statusError == napi_ok) {
-        statusError = napi_create_string_utf8(env, errMsg.c_str(), NAPI_AUTO_LENGTH, &napiErrorMsg);
-        if (statusError == napi_ok) {
-            statusError = napi_create_error(env, napiErrorCode, napiErrorMsg, &errorObj);
-            if (statusError == napi_ok) {
-                NAPI_DEBUG_LOG("napi_create_error success");
-            }
-        }
+    errorObj = nullptr;
+    napi_value code = nullptr;
+    napi_value message = nullptr;
+    napi_value candidate = nullptr;
+    if (napi_create_int32(env, errCode, &code) != napi_ok ||
+        napi_create_string_utf8(env, errMsg.c_str(), NAPI_AUTO_LENGTH, &message) != napi_ok ||
+        napi_create_error(env, nullptr, message, &candidate) != napi_ok ||
+        napi_set_named_property(env, candidate, "code", code) != napi_ok) {
+        NAPI_ERR_LOG("Create numeric BusinessError failed");
+        return;
     }
+    errorObj = candidate;
 }
 
 void MediaLibraryNapiUtils::InvokeJSAsyncMethodWithoutWork(napi_env env, napi_deferred deferred, napi_ref callbackRef,

@@ -20,6 +20,7 @@
       "features": [
         "media_library_link_opt",
         "media_library_feature_mtp",
+        "media_library_feature_qemu_standard_functionfs",
         "media_library_feature_back_up",
         "media_library_feature_cloud_enhancement",
         "media_library_feature_cloud_download",

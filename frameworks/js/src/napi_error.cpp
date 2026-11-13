@@ -69,6 +69,22 @@ static std::string GetSpecificErrorMessage(int32_t err, const char *funcName)
     return "";
 }
 
+static void ThrowNumericBusinessError(napi_env env, int32_t code, const std::string &message)
+{
+    bool pending = false;
+    NAPI_CALL_RETURN_VOID(env, napi_is_exception_pending(env, &pending));
+    if (pending) {
+        // A validation helper already chose the error. Do not replace it with
+        // the enclosing wrapper's generic null-result failure.
+        return;
+    }
+    napi_value errorObj = nullptr;
+    MediaLibraryNapiUtils::CreateNapiErrorObject(env, errorObj, code, message);
+    if (errorObj != nullptr) {
+        NAPI_CALL_RETURN_VOID(env, napi_throw(env, errorObj));
+    }
+}
+
 void NapiError::SetApiName(const std::string &Name)
 {
     apiName = Name;
@@ -189,7 +205,7 @@ void NapiError::ThrowError(napi_env env, int32_t err, const std::string &errMsg)
     }
 
     NAPI_DEBUG_LOG("ThrowError errCode:%{public}d errMsg:%{public}s", err, message.c_str());
-    NAPI_CALL_RETURN_VOID(env, napi_throw_error(env, to_string(err).c_str(), message.c_str()));
+    ThrowNumericBusinessError(env, err, message);
 }
 
 void NapiError::ThrowError(napi_env env, int32_t err, const char *funcName, int32_t line, const std::string &errMsg)
@@ -217,7 +233,7 @@ void NapiError::ThrowError(napi_env env, int32_t err, const char *funcName, int3
 
     NAPI_ERR_LOG("{%{public}s:%d} ThrowError errCode:%{public}d errMsg:%{public}s", funcName, line,
         err, message.c_str());
-    NAPI_CALL_RETURN_VOID(env, napi_throw_error(env, to_string(err).c_str(), message.c_str()));
+    ThrowNumericBusinessError(env, err, message);
 }
 
 } // namespace Media

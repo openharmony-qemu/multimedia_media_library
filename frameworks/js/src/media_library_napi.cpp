@@ -35,6 +35,7 @@
 #include "directory_ex.h"
 #include "locale_config.h"
 #include "media_analysis_progress_column.h"
+#include "media_column.h"
 #include "media_device_column.h"
 #include "media_directory_type_column.h"
 #include "media_file_asset_columns.h"
@@ -52,6 +53,8 @@
 #include "modal_ui_callback.h"
 #include "napi_common_want.h"
 #include "photo_album_napi.h"
+#include "userfile_manager_types.h"
+#include "medialibrary_type_const.h"
 #include "result_set_utils.h"
 #include "search_column.h"
 #include "short_term_callback.h"
@@ -529,6 +532,110 @@ napi_value MediaLibraryNapi::UserFileMgrInit(napi_env env, napi_value exports)
     return exports;
 }
 
+static napi_value CreateFusionAssetTypeEnum(napi_env env)
+{
+    napi_value result = nullptr;
+    napi_value compatible = nullptr;
+    NAPI_CALL(env, napi_create_object(env, &result));
+    NAPI_CALL(env, napi_create_int32(env, static_cast<int32_t>(FusionAssetType::COMPATIBLE_ASSET), &compatible));
+    NAPI_CALL(env, napi_set_named_property(env, result, "COMPATIBLE_ASSET", compatible));
+    return result;
+}
+
+static napi_status RegisterPublicPhotoEnums(napi_env env, napi_value exports)
+{
+    struct Member {
+        const char *name;
+        int32_t value;
+    };
+    struct Contract {
+        const char *name;
+        std::vector<Member> members;
+    };
+    const Contract contracts[] = {
+        // Public source flags reuse the existing database source discriminator.
+        {"AssetSourceType", {
+            {"MEDIA", static_cast<int32_t>(FileSourceTypes::MEDIA)},
+            {"FILE_MANAGER", static_cast<int32_t>(FileSourceTypes::FILE_MANAGER)},
+        }},
+        {"FieldType", {
+            {"NONE", 0},
+            {"ANALYSIS_PEOPLE", 1},
+            {"ANALYSIS_LABEL", 2},
+            {"ANALYSIS_CITY", 3},
+            {"YEAR", 4},
+            {"MONTH", 5},
+            {"DAY", 6},
+            {"HOLIDAY", 7},
+            {"MEDIA_TYPE", 8},
+        }},
+        {"RankingMethod", {{"RANDOM_VOTE", 0}}},
+        {"SearchSuggestionType", {
+            {"TIME_GEO_LABEL", 0},
+            {"TIME_GEO", 1},
+            {"TIME_LABEL", 2},
+            {"TIME_PEOPLE_GEO_LABEL", 3},
+            {"TIME_PEOPLE_GEO", 4},
+            {"TIME_PEOPLE_LABEL", 5},
+            {"TIME_PEOPLE", 6},
+        }},
+        {"PhotoRiskStatus", {
+            {"UNIDENTIFIED", static_cast<int32_t>(PhotoRiskStatus::UNIDENTIFIED)},
+            {"APPROVED", static_cast<int32_t>(PhotoRiskStatus::APPROVED)},
+            {"SUSPICIOUS", static_cast<int32_t>(PhotoRiskStatus::SUSPICIOUS)},
+            {"REJECTED", static_cast<int32_t>(PhotoRiskStatus::REJECTED)},
+        }},
+        // The native AppLinkState wire contract is the existing vector's 0-based index.
+        {"AppLinkState", {{appLinkStateEnum[0].c_str(), 0},
+            {appLinkStateEnum[1].c_str(), 1}, {appLinkStateEnum[2].c_str(), 2}}},
+        {"LivePhoto4dStatus", {
+            {"UNIDENTIFIED", static_cast<int32_t>(LivePhoto4dStatusType::TYPE_UNIDENTIFIED)},
+            {"UNSUPPORTED", static_cast<int32_t>(LivePhoto4dStatusType::TYPE_UNSUPPORTED)},
+            {"SUPPORTED", static_cast<int32_t>(LivePhoto4dStatusType::TYPE_SUPPORTED)},
+            {"USED", static_cast<int32_t>(LivePhoto4dStatusType::TYPE_USED)},
+            {"LIVEPHOTO_4D", static_cast<int32_t>(LivePhoto4dStatusType::TYPE_LIVEPHOTO_4D)},
+        }},
+        {"DeepOptimizeState", {
+            {"RUNNING", static_cast<int32_t>(DeepOptimizeSpaceState::RUNNING)},
+            {"COMPLETED", static_cast<int32_t>(DeepOptimizeSpaceState::COMPLETED)},
+            {"FAILED", static_cast<int32_t>(DeepOptimizeSpaceState::FAILED)},
+            {"STOPPED", static_cast<int32_t>(DeepOptimizeSpaceState::STOPPED)},
+            {"INTERRUPTED", static_cast<int32_t>(DeepOptimizeSpaceState::INTERRUPTED)},
+        }},
+        {"CoverUriSource", {
+            {"DEFAULT_COVER", static_cast<int32_t>(CoverUriSource::DEFAULT_COVER)},
+            {"MANUAL_COVER", static_cast<int32_t>(CoverUriSource::MANUAL_CLOUD_COVER)},
+        }},
+        {"ThumbnailVisibility", {
+            {"INVISIBLE", static_cast<int32_t>(ThumbnailVisibility::INVISIBLE)},
+            {"VISIBLE", static_cast<int32_t>(ThumbnailVisibility::VISIBLE)},
+        }},
+    };
+    for (const auto &contract : contracts) {
+        napi_value object = nullptr;
+        napi_status status = napi_create_object(env, &object);
+        if (status != napi_ok) {
+            return status;
+        }
+        for (const auto &member : contract.members) {
+            napi_value value = nullptr;
+            status = napi_create_int32(env, member.value, &value);
+            if (status != napi_ok) {
+                return status;
+            }
+            status = napi_set_named_property(env, object, member.name, value);
+            if (status != napi_ok) {
+                return status;
+            }
+        }
+        status = napi_set_named_property(env, exports, contract.name, object);
+        if (status != napi_ok) {
+            return status;
+        }
+    }
+    return napi_ok;
+}
+
 napi_value MediaLibraryNapi::PhotoAccessHelperInit(napi_env env, napi_value exports)
 {
     NapiClassInfo info = { PHOTOACCESSHELPER_NAPI_CLASS_NAME, &photoAccessHelperConstructor_,
@@ -639,6 +746,7 @@ napi_value MediaLibraryNapi::PhotoAccessHelperInit(napi_env env, napi_value expo
         DECLARE_NAPI_PROPERTY("ThumbnailType", CreateKeyFrameThumbnailTypeEnum(env)),
         DECLARE_NAPI_STATIC_FUNCTION("requestPhotoUrisReadPermission", RequestPhotoUrisReadPermission),
         DECLARE_NAPI_STATIC_FUNCTION("requestPhotoUrisReadPermissionEx", RequestPhotoUrisReadPermissionEx),
+        DECLARE_NAPI_PROPERTY("FusionAssetType", CreateFusionAssetTypeEnum(env)),
         DECLARE_NAPI_PROPERTY("PhotoType", CreateMediaTypeUserFileEnum(env)),
         DECLARE_NAPI_PROPERTY("AlbumKeys", CreateAlbumKeyEnum(env)),
         DECLARE_NAPI_PROPERTY("AlbumType", CreateAlbumTypeEnum(env)),
@@ -688,6 +796,9 @@ napi_value MediaLibraryNapi::PhotoAccessHelperInit(napi_env env, napi_value expo
         DECLARE_NAPI_PROPERTY("AvailabilityStatus", CreateAvailabilityStatusEnum(env)),
     };
     MediaLibraryNapiUtils::NapiAddStaticProps(env, exports, staticProps);
+    if (RegisterPublicPhotoEnums(env, exports) != napi_ok) {
+        return nullptr;
+    }
     return exports;
 }
 

@@ -15,6 +15,9 @@
 #define MLOG_TAG "Extension"
 
 #include "media_datashare_ext_ability.h"
+#include "knowledge_content_query.h"
+#include "medialibrary_rdbstore.h"
+#include "rdb_utils.h"
 
 #include "app_mgr_client.h"
 #include "cloud_media_asset_manager.h"
@@ -985,6 +988,47 @@ int MediaDataShareExtAbility::Delete(const Uri &uri, const DataSharePredicates &
 shared_ptr<DataShareResultSet> MediaDataShareExtAbility::Query(const Uri &uri,
     const DataSharePredicates &predicates, vector<string> &columns, DatashareBusinessError &businessError)
 {
+    // Fixed internal Knowledge route. The HAP never opens the service database
+    // and cannot send SQL. Check the actual IPC caller before decoding input.
+    if (uri.ToString() == std::string(MEDIALIBRARY_DATA_URI) + "/knowledge-content") {
+        if (!PermissionUtils::IsSystemApp()) {
+            businessError.SetCode(202); return nullptr;
+        }
+        if (!PermissionUtils::CheckCallerPermission("ohos.permission.READ_IMAGEVIDEO")) {
+            businessError.SetCode(201); return nullptr;
+        }
+        Knowledge::Query query;
+        if (!predicates.GetOperationList().empty() || !predicates.GetWhereClause().empty() ||
+            !predicates.GetWhereArgs().empty() || !Knowledge::DecodeServiceWire(columns, query)) {
+            businessError.SetCode(13900020); return nullptr;
+        }
+        auto store = MediaLibraryRdbStore::GetRaw();
+        if (store == nullptr) {
+            MEDIA_ERR_LOG("Knowledge phase=service-rdb-open result=null; underlying_rc=unavailable");
+            businessError.SetCode(23800301); return nullptr;
+        }
+        std::vector<NativeRdb::ValueObject> args;
+        for (const auto &value : query.args) {
+            if (std::holds_alternative<int64_t>(value)) args.emplace_back(std::get<int64_t>(value));
+            else args.emplace_back(std::get<std::string>(value));
+        }
+        // DataShare's own GoToRow pre-counts; cap work by the existing 8MiB
+        // response budget. The sentinel count is rejected, never truncated to success.
+        const auto sql = query.sql + " LIMIT " + std::to_string(Knowledge::SERVICE_ROW_LIMIT + 1);
+        auto result = store->QueryByStep(sql, args, false);
+        if (result == nullptr) {
+            MEDIA_ERR_LOG("Knowledge phase=service-query result=null; underlying_rc=unavailable");
+            businessError.SetCode(23800301); return nullptr;
+        }
+        // Reuse the same real RDB/DataShare bridge as MediaLibraryDataManager.
+        // No explicit service pre-count or preload; the client checks the bounded count.
+        auto bridge = OHOS::RdbDataShareAdapter::RdbUtils::ToResultSetBridge(result);
+        if (bridge == nullptr) {
+            result->Close(); businessError.SetCode(23800301); return nullptr;
+        }
+        businessError.SetCode(0);
+        return std::make_shared<DataShareResultSet>(bridge);
+    }
     MediaLibraryCommand cmd(uri);
     PermParam permParam = {.isWrite = false};
     CHECK_AND_RETURN_RET_LOG(permissionHandler_ != nullptr, nullptr, "permissionHandler_ is nullptr");

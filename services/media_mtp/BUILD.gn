@@ -184,6 +184,9 @@ ohos_shared_library("media_mtp") {
   ]
 
   defines = []
+  if (media_library_feature_qemu_standard_functionfs) {
+    defines += [ "MEDIA_QEMU_STANDARD_FUNCTIONFS" ]
+  }
   if (media_library_feature_mtp) {
     defines += [ "MEDIALIBRARY_MTP_ENABLE=1" ]
   }

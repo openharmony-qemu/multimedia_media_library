@@ -73,6 +73,14 @@ int MtpDriver::OpenDriver()
 
 int MtpDriver::CloseDriver()
 {
+#ifdef MEDIA_QEMU_STANDARD_FUNCTIONFS
+    if (usbfnMtpInterface != nullptr) {
+        const int result = usbfnMtpInterface->Stop();
+        if (result != 0) {
+            return result;
+        }
+    }
+#endif
     usbOpenFlag = false;
     usbfnMtpInterface = nullptr;
     return MTP_SUCCESS;

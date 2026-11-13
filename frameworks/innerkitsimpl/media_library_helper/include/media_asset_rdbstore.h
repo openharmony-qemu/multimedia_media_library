@@ -49,6 +49,8 @@ public:
         std::vector<std::string>& columns, OperationObject& object);
     EXPORT int32_t QueryTimeIdBatch(int32_t start, int32_t count, std::vector<std::string> &batchKeys);
     EXPORT std::shared_ptr<NativeRdb::ResultSet> QueryByStep(const std::string &sql);
+    EXPORT std::shared_ptr<NativeRdb::ResultSet> QueryByStep(const std::string &sql,
+        const std::vector<NativeRdb::ValueObject> &args);
 
 private:
     MediaAssetRdbStore();

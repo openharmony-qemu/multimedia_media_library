@@ -402,6 +402,24 @@ std::shared_ptr<NativeRdb::ResultSet> MediaAssetRdbStore::QueryByStep(const std:
     return rdbStore_->QueryByStep(sql);
 }
 
+std::shared_ptr<NativeRdb::ResultSet> MediaAssetRdbStore::QueryByStep(const std::string &sql,
+    const std::vector<NativeRdb::ValueObject> &args)
+{
+    std::shared_ptr<NativeRdb::RdbStore> store;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        store = rdbStore_;
+    }
+    if (store == nullptr) {
+        if (TryGetRdbStore(false) != NativeRdb::E_OK) {
+            return nullptr;
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        store = rdbStore_;
+    }
+    return store == nullptr ? nullptr : store->QueryByStep(sql, args, false);
+}
+
 bool MediaAssetRdbStore::IsSupportSharedAssetQuery(Uri& uri, OperationObject& object, bool isIgnoreSELinux)
 {
     CHECK_AND_RETURN_RET(access(CONST_MEDIA_DB_DIR, E_OK) == 0, false);
